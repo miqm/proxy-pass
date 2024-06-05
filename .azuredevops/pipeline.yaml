@@ -1,0 +1,72 @@
+trigger:
+  batch: true
+  branches:
+    include:
+      - main
+  tags:
+    include:
+      - v*
+  paths:
+    include:
+      - Dockerfile
+      - nginx
+
+pr:
+  autoCancel: true
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - Dockerfile
+  drafts: false
+
+resources:
+  repositories:
+    - repository: self
+      type: git
+      ref: main
+
+jobs:
+  - job: Main
+    ${{ if startsWith(variables['Build.SourceBranch'], 'refs/tags/v') }}:
+      displayName: Publish
+    ${{ else }}:
+      displayName: Build
+    pool:
+      vmImage: ubuntu-20.04
+    steps:
+      - checkout: self
+        clean: true
+      - task: DockerInstaller@0
+        displayName: Install Docker
+        inputs:
+          dockerVersion: 24.0.6
+          releaseType: stable
+      - ${{ if startsWith(variables['Build.SourceBranch'], 'refs/tags/v') }}:
+        - script: |
+            echo "##vso[task.setvariable variable=tag]$(Build.SourceBranchName)"
+          displayName: Set tags
+        - task: Docker@2
+          displayName: Build and Push
+          inputs:
+            command: buildAndPush
+            containerRegistry: 431f8689-26bb-4f69-a9b3-aeb8982ee1ae
+            repository: miqm/proxy-pass
+            tags: |
+              latest
+              $(tag)
+            addPipelineData: false
+            addBaseImageData: false
+      - ${{ else }}:
+        - task: Docker@2
+          displayName: Build
+          inputs:
+            command: build
+            containerRegistry: 431f8689-26bb-4f69-a9b3-aeb8982ee1ae
+            repository: miqm/proxy-pass
+            Dockerfile: Dockerfile
+            tags: |
+              latest
+            addPipelineData: false
+            addBaseImageData: false
